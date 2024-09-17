@@ -28,30 +28,82 @@ class Repl:
         self.conversation = conversation or Conversation(system_instruction=config.system_instruction)
         self.out = out
         self._read = read
+        self.running = True
+        self.commands = {
+            "help": self.cmd_help,
+            "exit": self.cmd_exit,
+            "quit": self.cmd_exit,
+            "new": self.cmd_new,
+            "clear": self.cmd_new,
+            "system": self.cmd_system,
+            "model": self.cmd_model,
+        }
 
     def run(self) -> None:
-        print(BANNER, file=self.out)
-        while True:
+        self._print(BANNER)
+        while self.running:
             try:
                 line = self._read(PROMPT).strip()
             except (EOFError, KeyboardInterrupt):
-                print(file=self.out)
+                self._print("")
                 break
             if not line:
                 continue
             self.handle(line)
 
     def handle(self, line: str) -> None:
-        self.send(line)
+        if line.startswith("/"):
+            self.command(line[1:])
+        else:
+            self.send(line)
+
+    def command(self, raw: str) -> None:
+        name, _, arg = raw.partition(" ")
+        handler = self.commands.get(name.lower())
+        if handler is None:
+            self._print(f"unknown command: /{name} (try /help)")
+            return
+        handler(arg.strip())
 
     def send(self, text: str) -> None:
         self.conversation.add_user(text)
         try:
             result = self.client.generate(self.conversation)
         except GeminiError as e:
-            print(f"error: {e}", file=self.out)
-            # Drop the unanswered user turn so the history stays consistent.
+            self._print(f"error: {e}")
             self.conversation.messages.pop()
             return
         self.conversation.add_model(result.text)
-        print(result.text, file=self.out)
+        self._print(result.text)
+
+    # --- commands ----------------------------------------------------------
+    def cmd_help(self, _arg: str) -> None:
+        self._print(
+            "commands:\n"
+            "  /new            start a fresh conversation\n"
+            "  /system <text>  set the system instruction\n"
+            "  /model <name>   switch model\n"
+            "  /help           this help\n"
+            "  /exit           quit"
+        )
+
+    def cmd_exit(self, _arg: str) -> None:
+        self.running = False
+
+    def cmd_new(self, _arg: str) -> None:
+        self.conversation.clear()
+        self._print("started a new conversation")
+
+    def cmd_system(self, arg: str) -> None:
+        self.conversation.system_instruction = arg or None
+        self._print(f"system instruction {'set' if arg else 'cleared'}")
+
+    def cmd_model(self, arg: str) -> None:
+        if not arg:
+            self._print(f"current model: {self.config.model}")
+            return
+        self.config.model = arg
+        self._print(f"model set to {arg}")
+
+    def _print(self, text: str) -> None:
+        print(text, file=self.out)

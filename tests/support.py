@@ -24,3 +24,18 @@ class FakeTransport:
         import json
 
         return json.loads(self.calls[-1]["body"])
+
+
+class FakeClient:
+    """A GeminiClient stand-in that returns scripted replies."""
+
+    def __init__(self, replies: list[str] | None = None):
+        self.replies = list(replies or [])
+        self.seen: list = []
+
+    def generate(self, conversation):
+        from gemini_chat.client import GenerateResult
+
+        self.seen.append(list(conversation.messages))
+        text = self.replies.pop(0) if self.replies else "ok"
+        return GenerateResult(text=text, total_tokens=1)
