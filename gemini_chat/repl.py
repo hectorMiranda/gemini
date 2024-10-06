@@ -9,6 +9,7 @@ from .client import GeminiClient
 from .config import Config
 from .errors import GeminiError
 from .models import Conversation
+from . import session
 
 PROMPT = "gemini › "
 BANNER = "gemini-chat — type a message, or /help for commands. Ctrl-D to quit."
@@ -37,6 +38,9 @@ class Repl:
             "clear": self.cmd_new,
             "system": self.cmd_system,
             "model": self.cmd_model,
+            "save": self.cmd_save,
+            "load": self.cmd_load,
+            "sessions": self.cmd_sessions,
         }
 
     def run(self) -> None:
@@ -104,6 +108,30 @@ class Repl:
             return
         self.config.model = arg
         self._print(f"model set to {arg}")
+
+    def cmd_save(self, arg: str) -> None:
+        if not arg:
+            self._print("usage: /save <name>")
+            return
+        try:
+            session.save_session(arg, self.conversation)
+            self._print(f"saved session '{arg}'")
+        except (OSError, ValueError) as e:
+            self._print(f"error: {e}")
+
+    def cmd_load(self, arg: str) -> None:
+        if not arg:
+            self._print("usage: /load <name>")
+            return
+        try:
+            self.conversation = session.load_session(arg)
+            self._print(f"loaded session '{arg}' ({len(self.conversation.messages)} messages)")
+        except (OSError, ValueError) as e:
+            self._print(f"error: {e}")
+
+    def cmd_sessions(self, _arg: str) -> None:
+        names = session.list_sessions()
+        self._print("\n".join(names) if names else "no saved sessions")
 
     def _print(self, text: str) -> None:
         print(text, file=self.out)
