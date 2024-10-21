@@ -61,6 +61,31 @@ class GeminiClient:
         data = json.loads(raw)
         return self._parse_result(data)
 
+    def stream(self, conversation: Conversation):
+        """Yield text deltas as the model produces them (Server-Sent Events)."""
+        url = self._url("streamGenerateContent", {"alt": "sse"})
+        payload = json.dumps(self._request_body(conversation)).encode("utf-8")
+        resp = self.transport.request(
+            "POST", url, headers={"Content-Type": "application/json"}, body=payload
+        )
+        if resp.status != 200:
+            self._raise_for_status(resp.status, resp.read())
+        for line in resp.iter_lines():
+            if not line.startswith("data:"):
+                continue
+            data = line[len("data:"):].strip()
+            if not data or data == "[DONE]":
+                continue
+            try:
+                obj = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            for cand in obj.get("candidates", []):
+                for part in cand.get("content", {}).get("parts", []):
+                    text = part.get("text")
+                    if text:
+                        yield text
+
     @staticmethod
     def _raise_for_status(status: int, body: bytes) -> None:
         text = body.decode("utf-8", "replace")
