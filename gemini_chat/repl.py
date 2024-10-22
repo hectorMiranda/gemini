@@ -72,13 +72,25 @@ class Repl:
     def send(self, text: str) -> None:
         self.conversation.add_user(text)
         try:
-            result = self.client.generate(self.conversation)
+            if self.config.stream and hasattr(self.client, "stream"):
+                reply = self._stream_reply()
+            else:
+                reply = self.client.generate(self.conversation).text
+                self._print(reply)
         except GeminiError as e:
             self._print(f"error: {e}")
             self.conversation.messages.pop()
             return
-        self.conversation.add_model(result.text)
-        self._print(result.text)
+        self.conversation.add_model(reply)
+
+    def _stream_reply(self) -> str:
+        chunks: list[str] = []
+        for delta in self.client.stream(self.conversation):
+            chunks.append(delta)
+            self.out.write(delta)
+            self.out.flush()
+        self.out.write("\n")
+        return "".join(chunks)
 
     # --- commands ----------------------------------------------------------
     def cmd_help(self, _arg: str) -> None:

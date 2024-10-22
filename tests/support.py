@@ -39,3 +39,11 @@ class FakeClient:
         self.seen.append(list(conversation.messages))
         text = self.replies.pop(0) if self.replies else "ok"
         return GenerateResult(text=text, total_tokens=1)
+
+    def stream(self, conversation):
+        self.seen.append(list(conversation.messages))
+        text = self.replies.pop(0) if self.replies else "ok"
+        # Yield in a couple of chunks to exercise streaming assembly.
+        mid = max(1, len(text) // 2)
+        yield text[:mid]
+        yield text[mid:]
