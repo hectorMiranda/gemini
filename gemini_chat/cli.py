@@ -21,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    config = Config.from_env()
+    config = Config.load()
     if args.model:
         config.model = args.model
     if args.system:
