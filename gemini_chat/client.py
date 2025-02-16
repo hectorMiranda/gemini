@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.parse
 from dataclasses import dataclass
+from typing import Callable
 
 from .config import Config
 from .errors import ApiError, AuthError, GeminiError, RateLimitError
 from .models import Conversation
-from .transport import Transport, UrllibTransport
+from .transport import HttpResponse, Transport, TransportError, UrllibTransport
 
 
 @dataclass
@@ -23,9 +25,39 @@ class GenerateResult:
 
 
 class GeminiClient:
-    def __init__(self, config: Config, transport: Transport | None = None):
+    # Status codes worth retrying (transient).
+    _RETRYABLE = {429, 500, 502, 503, 504}
+
+    def __init__(
+        self,
+        config: Config,
+        transport: Transport | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ):
         self.config = config
         self.transport = transport or UrllibTransport()
+        self._sleep = sleep
+
+    def _request(self, method: str, url: str, body: bytes) -> HttpResponse:
+        """Issue a request, retrying transient failures with exponential backoff."""
+        attempts = max(0, self.config.retries) + 1
+        headers = {"Content-Type": "application/json"}
+        last: HttpResponse | None = None
+        for attempt in range(attempts):
+            try:
+                resp = self.transport.request(method, url, headers=headers, body=body)
+            except TransportError:
+                if attempt + 1 >= attempts:
+                    raise
+                self._sleep(2**attempt * 0.5)
+                continue
+            if resp.status in self._RETRYABLE and attempt + 1 < attempts:
+                resp.close()
+                self._sleep(2**attempt * 0.5)
+                last = resp
+                continue
+            return resp
+        return last  # type: ignore[return-value]
 
     def _url(self, action: str, query: dict | None = None) -> str:
         params = {"key": self.config.require_api_key(), **(query or {})}
@@ -52,9 +84,7 @@ class GeminiClient:
         """Single (non-streaming) completion for the current conversation."""
         url = self._url("generateContent")
         payload = json.dumps(self._request_body(conversation)).encode("utf-8")
-        resp = self.transport.request(
-            "POST", url, headers={"Content-Type": "application/json"}, body=payload
-        )
+        resp = self._request("POST", url, payload)
         raw = resp.read()
         if resp.status != 200:
             self._raise_for_status(resp.status, raw)
@@ -65,9 +95,7 @@ class GeminiClient:
         """Yield text deltas as the model produces them (Server-Sent Events)."""
         url = self._url("streamGenerateContent", {"alt": "sse"})
         payload = json.dumps(self._request_body(conversation)).encode("utf-8")
-        resp = self.transport.request(
-            "POST", url, headers={"Content-Type": "application/json"}, body=payload
-        )
+        resp = self._request("POST", url, payload)
         if resp.status != 200:
             self._raise_for_status(resp.status, resp.read())
         for line in resp.iter_lines():
