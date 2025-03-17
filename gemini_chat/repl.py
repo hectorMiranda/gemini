@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import mimetypes
 import sys
+from pathlib import Path
 from typing import Callable, TextIO
 
 from .client import GeminiClient
 from .config import Config
 from .errors import GeminiError
-from .models import Conversation
-from . import session
+from .models import Conversation, Part
+from . import export, session
 
 PROMPT = "gemini › "
 BANNER = "gemini-chat — type a message, or /help for commands. Ctrl-D to quit."
@@ -30,6 +32,7 @@ class Repl:
         self.out = out
         self._read = read
         self.running = True
+        self.pending: list[Part] = []
         self.commands = {
             "help": self.cmd_help,
             "exit": self.cmd_exit,
@@ -41,6 +44,9 @@ class Repl:
             "save": self.cmd_save,
             "load": self.cmd_load,
             "sessions": self.cmd_sessions,
+            "attach": self.cmd_attach,
+            "export": self.cmd_export,
+            "usage": self.cmd_usage,
         }
 
     def run(self) -> None:
@@ -70,7 +76,9 @@ class Repl:
         handler(arg.strip())
 
     def send(self, text: str) -> None:
-        self.conversation.add_user(text)
+        parts = [Part(text=text), *self.pending]
+        self.conversation.add_user(text, parts=parts)
+        self.pending = []
         try:
             if self.config.stream and hasattr(self.client, "stream"):
                 reply = self._stream_reply()
@@ -144,6 +152,37 @@ class Repl:
     def cmd_sessions(self, _arg: str) -> None:
         names = session.list_sessions()
         self._print("\n".join(names) if names else "no saved sessions")
+
+    def cmd_attach(self, arg: str) -> None:
+        if not arg:
+            self._print("usage: /attach <path>")
+            return
+        path = Path(arg).expanduser()
+        if not path.exists():
+            self._print(f"error: no such file: {path}")
+            return
+        mime, _ = mimetypes.guess_type(str(path))
+        mime = mime or "application/octet-stream"
+        if mime.startswith("text/") or mime in ("application/json", "application/xml"):
+            self.pending.append(Part(text=f"[file {path.name}]\n{path.read_text(errors='replace')}"))
+        else:
+            self.pending.append(Part(mime_type=mime, data=path.read_bytes()))
+        self._print(f"attached {path.name} ({mime}); will send with your next message")
+
+    def cmd_export(self, arg: str) -> None:
+        if not arg:
+            self._print("usage: /export <path.md>")
+            return
+        try:
+            Path(arg).expanduser().write_text(export.to_markdown(self.conversation), encoding="utf-8")
+            self._print(f"exported to {arg}")
+        except OSError as e:
+            self._print(f"error: {e}")
+
+    def cmd_usage(self, _arg: str) -> None:
+        chars = sum(len(m.text_content) for m in self.conversation.messages)
+        approx = chars // 4  # rough heuristic: ~4 chars per token
+        self._print(f"{len(self.conversation.messages)} messages, ~{approx} tokens (estimate)")
 
     def _print(self, text: str) -> None:
         print(text, file=self.out)
