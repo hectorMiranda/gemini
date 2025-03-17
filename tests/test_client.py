@@ -26,7 +26,8 @@ def ok_response(text="hi there", prompt=3, out=2):
 
 class ClientTest(unittest.TestCase):
     def setUp(self):
-        self.config = Config(api_key="test-key", model="gemini-1.5-flash")
+        # retries=0 so a single error response maps directly (no backoff loop).
+        self.config = Config(api_key="test-key", model="gemini-1.5-flash", retries=0)
 
     def test_generate_parses_text_and_usage(self):
         t = FakeTransport([ok_response("hello", prompt=5, out=7)])
