@@ -38,4 +38,35 @@ The official SDK is great, but sometimes you just want a snappy REPL in your
 terminal with history and sessions, nothing to install, and no surprises. That's
 this.
 
+## Commands
+
+| Command | Description |
+| --- | --- |
+| `/new` | start a fresh conversation |
+| `/system <text>` | set the system instruction / persona |
+| `/model [name]` | show or switch the model |
+| `/temp <0-2>` · `/max <n>` | generation settings |
+| `/attach <path>` | attach a text or image file to the next message |
+| `/save <name>` · `/load <name>` · `/sessions` | manage saved conversations |
+| `/export <file.md>` | export the conversation to Markdown |
+| `/usage` | rough token estimate |
+| `/help` · `/exit` | help / quit |
+
+## Configuration
+
+Settings come from `~/.config/gemini-chat/config.toml`, overridden by environment
+variables:
+
+```toml
+model = "gemini-1.5-flash"
+temperature = 0.7
+retries = 2
+```
+
+| Env var | Meaning |
+| --- | --- |
+| `GEMINI_API_KEY` | API key (required) |
+| `GEMINI_MODEL` | default model |
+| `GEMINI_SYSTEM` | default system instruction |
+
 Requires Python 3.11+.
