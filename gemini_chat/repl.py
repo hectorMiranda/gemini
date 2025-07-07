@@ -11,7 +11,7 @@ from .client import GeminiClient
 from .config import Config
 from .errors import GeminiError
 from .models import Conversation, Part
-from . import export, session
+from . import export, session, tokens
 
 PROMPT = "gemini › "
 BANNER = "gemini-chat — type a message, or /help for commands. Ctrl-D to quit."
@@ -47,6 +47,8 @@ class Repl:
             "attach": self.cmd_attach,
             "export": self.cmd_export,
             "usage": self.cmd_usage,
+            "temp": self.cmd_temp,
+            "max": self.cmd_max,
         }
 
     def run(self) -> None:
@@ -180,9 +182,28 @@ class Repl:
             self._print(f"error: {e}")
 
     def cmd_usage(self, _arg: str) -> None:
-        chars = sum(len(m.text_content) for m in self.conversation.messages)
-        approx = chars // 4  # rough heuristic: ~4 chars per token
+        approx = tokens.conversation_tokens(self.conversation)
         self._print(f"{len(self.conversation.messages)} messages, ~{approx} tokens (estimate)")
+
+    def cmd_temp(self, arg: str) -> None:
+        if not arg:
+            self._print(f"temperature: {self.config.temperature}")
+            return
+        try:
+            self.config.temperature = max(0.0, min(2.0, float(arg)))
+            self._print(f"temperature set to {self.config.temperature}")
+        except ValueError:
+            self._print("usage: /temp <0.0-2.0>")
+
+    def cmd_max(self, arg: str) -> None:
+        if not arg:
+            self._print(f"max output tokens: {self.config.max_output_tokens or 'default'}")
+            return
+        try:
+            self.config.max_output_tokens = max(1, int(arg))
+            self._print(f"max output tokens set to {self.config.max_output_tokens}")
+        except ValueError:
+            self._print("usage: /max <int>")
 
     def _print(self, text: str) -> None:
         print(text, file=self.out)
