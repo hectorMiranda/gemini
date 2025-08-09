@@ -1,1 +1,3 @@
 # gemini
+
+trying to use this from a phone... 
