@@ -42,6 +42,19 @@ class ReplTest(unittest.TestCase):
         repl.handle("/frobnicate")
         self.assertIn("unknown command", out.getvalue())
 
+    def test_persona_sets_system_instruction(self):
+        repl, _ = make_repl()
+        repl.handle("/persona coder")
+        self.assertIsNotNone(repl.conversation.system_instruction)
+
+    def test_retry_regenerates_last_reply(self):
+        repl, _ = make_repl(["first", "second"])
+        repl.handle("hi")
+        self.assertEqual(repl.conversation.messages[-1].text_content, "first")
+        repl.handle("/retry")
+        self.assertEqual(repl.conversation.messages[-1].text_content, "second")
+        self.assertEqual(len(repl.conversation.messages), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

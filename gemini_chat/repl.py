@@ -10,8 +10,8 @@ from typing import Callable, TextIO
 from .client import GeminiClient
 from .config import Config
 from .errors import GeminiError
-from .models import Conversation, Part
-from . import export, session, tokens
+from .models import Conversation, Part, Role
+from . import export, personas, session, tokens
 
 PROMPT = "gemini › "
 BANNER = "gemini-chat — type a message, or /help for commands. Ctrl-D to quit."
@@ -49,6 +49,8 @@ class Repl:
             "usage": self.cmd_usage,
             "temp": self.cmd_temp,
             "max": self.cmd_max,
+            "persona": self.cmd_persona,
+            "retry": self.cmd_retry,
         }
 
     def run(self) -> None:
@@ -81,6 +83,10 @@ class Repl:
         parts = [Part(text=text), *self.pending]
         self.conversation.add_user(text, parts=parts)
         self.pending = []
+        self._complete(drop_on_error=True)
+
+    def _complete(self, drop_on_error: bool = False) -> None:
+        """Generate a model reply for the current conversation (which must end with a user turn)."""
         try:
             if self.config.stream and hasattr(self.client, "stream"):
                 reply = self._stream_reply()
@@ -89,7 +95,8 @@ class Repl:
                 self._print(reply)
         except GeminiError as e:
             self._print(f"error: {e}")
-            self.conversation.messages.pop()
+            if drop_on_error and self.conversation.messages:
+                self.conversation.messages.pop()
             return
         self.conversation.add_model(reply)
 
@@ -184,6 +191,24 @@ class Repl:
     def cmd_usage(self, _arg: str) -> None:
         approx = tokens.conversation_tokens(self.conversation)
         self._print(f"{len(self.conversation.messages)} messages, ~{approx} tokens (estimate)")
+
+    def cmd_persona(self, arg: str) -> None:
+        if not arg:
+            self._print("personas: " + ", ".join(personas.names()))
+            return
+        if not personas.exists(arg):
+            self._print(f"unknown persona '{arg}' (try: {', '.join(personas.names())})")
+            return
+        self.conversation.system_instruction = personas.get(arg)
+        self._print(f"persona set to '{arg}'")
+
+    def cmd_retry(self, _arg: str) -> None:
+        if self.conversation.messages and self.conversation.messages[-1].role == Role.MODEL:
+            self.conversation.messages.pop()
+        if not self.conversation.messages or self.conversation.messages[-1].role != Role.USER:
+            self._print("nothing to retry")
+            return
+        self._complete()
 
     def cmd_temp(self, arg: str) -> None:
         if not arg:
