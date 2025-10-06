@@ -33,10 +33,12 @@ class GeminiClient:
         config: Config,
         transport: Transport | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        tools: list | None = None,
     ):
         self.config = config
         self.transport = transport or UrllibTransport()
         self._sleep = sleep
+        self.tools = tools or []
 
     def _request(self, method: str, url: str, body: bytes) -> HttpResponse:
         """Issue a request, retrying transient failures with exponential backoff."""
@@ -78,6 +80,10 @@ class GeminiClient:
         system = conversation.system_instruction or self.config.system_instruction
         if system:
             body["systemInstruction"] = {"parts": [{"text": system}]}
+        if self.tools:
+            from .tools import to_request
+
+            body["tools"] = to_request(self.tools)
         return body
 
     def generate(self, conversation: Conversation) -> GenerateResult:
