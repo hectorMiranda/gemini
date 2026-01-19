@@ -11,7 +11,7 @@ from .client import GeminiClient
 from .config import Config
 from .errors import GeminiError
 from .models import Conversation, Part, Role
-from . import export, personas, session, tokens
+from . import colors, export, personas, session, tokens
 
 PROMPT = "gemini › "
 BANNER = "gemini-chat — type a message, or /help for commands. Ctrl-D to quit."
@@ -55,9 +55,10 @@ class Repl:
 
     def run(self) -> None:
         self._print(BANNER)
+        prompt = colors.prompt_label(self.config.theme, self.config.color)
         while self.running:
             try:
-                line = self._read(PROMPT).strip()
+                line = self._read(prompt).strip()
             except (EOFError, KeyboardInterrupt):
                 self._print("")
                 break
@@ -180,11 +181,11 @@ class Repl:
 
     def cmd_export(self, arg: str) -> None:
         if not arg:
-            self._print("usage: /export <path.md>")
+            self._print("usage: /export <path.md|.json|.html>")
             return
         try:
-            Path(arg).expanduser().write_text(export.to_markdown(self.conversation), encoding="utf-8")
-            self._print(f"exported to {arg}")
+            fmt = export.write_export(self.conversation, arg)
+            self._print(f"exported {fmt} to {arg}")
         except OSError as e:
             self._print(f"error: {e}")
 
