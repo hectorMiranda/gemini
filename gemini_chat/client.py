@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 import urllib.parse
 from dataclasses import dataclass
 from typing import Callable
+
+logger = logging.getLogger("gemini_chat")
 
 from .config import Config
 from .errors import ApiError, AuthError, GeminiError, RateLimitError
@@ -45,6 +48,7 @@ class GeminiClient:
         attempts = max(0, self.config.retries) + 1
         headers = {"Content-Type": "application/json"}
         last: HttpResponse | None = None
+        logger.debug("%s %s", method, url.split("?")[0])  # omit the API key
         for attempt in range(attempts):
             try:
                 resp = self.transport.request(method, url, headers=headers, body=body)

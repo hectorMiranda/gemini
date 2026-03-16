@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from typing import TextIO
 
@@ -20,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-m", "--model", help="model name (e.g. gemini-1.5-pro)")
     p.add_argument("-s", "--system", help="system instruction / persona")
     p.add_argument("-t", "--temperature", type=float, help="sampling temperature")
+    p.add_argument("-v", "--verbose", action="store_true", help="log requests to stderr")
     p.add_argument("--version", action="version", version=f"gemini-chat {__version__}")
     return p
 
@@ -45,6 +47,8 @@ def run_once(config: Config, prompt: str, client: GeminiClient | None = None, ou
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(name)s: %(message)s")
     config = Config.load()
     if args.model:
         config.model = args.model
