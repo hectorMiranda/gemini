@@ -25,6 +25,13 @@ class RenderTest(unittest.TestCase):
         out = render("use `x`", color=True)
         self.assertIn("\033[36m", out)
 
+    def test_asterisks_inside_code_are_literal(self):
+        # Regression: markup inside an inline-code span must not be styled.
+        self.assertEqual(render("`a*b*c`", color=False), "a*b*c")
+        colored = render("`a*b*c`", color=True)
+        self.assertIn("a*b*c", colored)
+        self.assertNotIn("\033[3m", colored)  # no italic applied inside code
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,16 +21,26 @@ _ITALIC = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 
 
+_CODE_SPLIT = re.compile(r"(`[^`]+`)")
+
+
 def _inline(text: str, color: bool) -> str:
-    if color:
-        text = _INLINE_CODE.sub(lambda m: f"{CYAN}{m.group(1)}{RESET}", text)
-        text = _BOLD.sub(lambda m: f"{BOLD}{m.group(1)}{RESET}", text)
-        text = _ITALIC.sub(lambda m: f"{ITALIC}{m.group(1)}{RESET}", text)
-    else:
-        text = _INLINE_CODE.sub(r"\1", text)
-        text = _BOLD.sub(r"\1", text)
-        text = _ITALIC.sub(r"\1", text)
-    return text
+    # Split out inline-code spans first so their contents are never treated as
+    # bold/italic markup (e.g. `a*b*c` must stay literal).
+    out: list[str] = []
+    for i, seg in enumerate(_CODE_SPLIT.split(text)):
+        if i % 2 == 1:  # an inline-code span including backticks
+            inner = seg[1:-1]
+            out.append(f"{CYAN}{inner}{RESET}" if color else inner)
+        elif color:
+            seg = _BOLD.sub(lambda m: f"{BOLD}{m.group(1)}{RESET}", seg)
+            seg = _ITALIC.sub(lambda m: f"{ITALIC}{m.group(1)}{RESET}", seg)
+            out.append(seg)
+        else:
+            seg = _BOLD.sub(r"\1", seg)
+            seg = _ITALIC.sub(r"\1", seg)
+            out.append(seg)
+    return "".join(out)
 
 
 def render(text: str, color: bool = True) -> str:
